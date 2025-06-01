@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pipe Connect Game</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: #f0c987;
+            margin: 0;
+            overflow: hidden;
+            flex-direction: column; /* 讓內容垂直排列：網格在上，按鈕在下 */
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(4, 80px);
+            grid-template-rows: repeat(6, 80px);
+            gap: 4px;
+            border: 2px solid #666;
+            box-shadow: 5px 5px 15px rgba(0,0,0,0.3);
+            margin-bottom: 20px; /* 網格下方留白，與按鈕區隔 */
+        }
+        .cell {
+            width: 80px;
+            height: 80px;
+            background: #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #999;
+            cursor: pointer;
+            position: relative;
+        }
+        canvas.pipe {
+            width: 60px;
+            height: 60px;
+        }
+        .start::before, .end::before {
+            content: '';
+            position: absolute;
+            width: 25px;
+            height: 25px;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+        .start::before {
+            background-color: green;
+            box-shadow: 0 0 10px green;
+        }
+        .end::before {
+            background-color: red;
+            box-shadow: 0 0 10px red;
+        }
+        #win-message {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #4caf50;
+            color: white;
+            padding: 20px 30px;
+            border-radius: 15px;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 100;
+            box-shadow: 0 0 20px rgba(0,255,0,0.5);
+            text-align: center;
+            opacity: 0; /* Initially hidden with opacity for fade-in */
+            transition: opacity 0.5s ease-in-out;
+        }
+        #check-button {
+            padding: 15px 30px;
+            font-size: 20px;
+            background-color: #008cba;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 3px 3px 10px rgba(0,0,0,0.2);
+            transition: background-color 0.3s ease;
+        }
+        #check-button:hover {
+            background-color: #007bb5;
+        }
+        #check-button:active {
+            background-color: #006b9b;
+            box-shadow: 1px 1px 5px rgba(0,0,0,0.3);
+        }
+
+        /* 遊戲規則提示視窗樣式 */
+        #game-rules-modal {
+            display: flex; /* 預設為 flex，以便居中內容 */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7); /* 遮罩效果 */
+            justify-content: center;
+            align-items: center;
+            z-index: 200; /* 高於其他元素 */
+        }
+        .modal-content {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+            max-width: 500px;
+            animation: fadeIn 0.5s ease-out; /* 淡入動畫 */
+        }
+        .modal-content h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 28px;
+        }
+        .modal-content p {
+            color: #555;
+            font-size: 18px;
+            line-height: 1.6;
+            margin-bottom: 25px;
+        }
+        .modal-content button {
+            padding: 12px 25px;
+            font-size: 18px;
+            background-color: #28a745; /* 綠色按鈕 */
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .modal-content button:hover {
+            background-color: #218838;
+        }
+
+        /* 淡入動畫 */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        /* Video styling */
+        #win-video {
+            display: none; /* Hidden by default */
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 101; /* Above win message */
+            max-width: 80vw; /* Responsive width */
+            max-height: 80vh; /* Responsive height */
+            box-shadow: 0 0 30px rgba(0,0,0,0.8);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+    </style>
+</head>
+<body>
+    <div id="game-rules-modal">
+        <div class="modal-content">
+            <h2>💧 遊戲規則 🐊</h2>
+            <p>親愛的玩家：</p>
+            <p>請幫助可愛的鱷魚洗澡！</p>
+            <p>你需要點擊水管，轉動它們，將水流從<span style="color: green; font-weight: bold;">綠色起點</span>連接到<span style="color: red; font-weight: bold;">紅色終點</span>。</p>
+            <p>注意：直管只能水平或垂直放置！彎管可以四向旋轉。</p>
+            <p>全部連接成功後，點擊「確認連接」按鈕即可過關！</p>
+            <button id="start-game-button">開始遊戲</button>
+        </div>
+    </div>
+
+    <div id="win-message">🎉 破關成功！</div>
+    <div class="grid" id="grid"></div>
+    <button id="check-button">確認連接</button>
+    <video id="win-video" controls autoplay muted>
+        <source src="water.mp4" type="video/mp4">
+        Your browser does not support the video tag.
+    </video>
+
+    <script>
+        console.log("Script start!");
+        const grid = document.getElementById("grid");
+        const checkButton = document.getElementById("check-button");
+        const gameRulesModal = document.getElementById("game-rules-modal");
+        const startGameButton = document.getElementById("start-game-button");
+        const winMessage = document.getElementById("win-message");
+        const winVideo = document.getElementById("win-video");
+
+        const rows = 6;
+        const cols = 4;
+
+        const startIdx = 0;
+        const endIdx = 23;
+
+        const initialMap = [
+            ["", 0],            ["straight", 90],  ["straight", 90],  ["bend", 180],
+            ["bend", 90],       ["straight", 0],   ["bend", 0],       ["", 0],
+            ["straight", 0],    ["bend", 270],     ["straight", 90],  ["straight", 90],
+            ["straight", 0],    ["bend", 180],     ["bend", 90],      ["", 0],
+            ["bend", 270],      ["straight", 0],   ["bend", 0],       ["straight", 0],
+            ["straight", 90],   ["bend", 90],      ["straight", 0],   ["", 0]
+        ];
+        initialMap[startIdx] = ["", 0];
+        initialMap[endIdx] = ["", 0];
+
+        const map = initialMap.map(arr => [...arr]); // 遊戲中會變動的 map
+
+        // --- UPDATED: Manually determined correct path ---
+        // Based on your input: 4-5-6-10-14-13-17-21-22
+        const correctPath = [
+            0, // Start
+            4, 5, 6, 10, 14, 13, 17, 21, 22,
+            23 // End
+        ];
+
+
+        // This solutionMap is for comparison to check if the pipes are correctly rotated.
+        // It should match the rotations of the pipes in the `correctPath` when they are correctly oriented.
+        const solutionMap = [
+            ["", 0],             ["straight", 90],   ["straight", 90],   ["bend", 180],
+            ["bend", 0],         ["straight", 90],   ["bend", 180],      ["", 0],
+            ["straight", 0],     ["bend", 270],      ["straight", 0],    ["straight", 90],
+            ["straight", 0],     ["bend", 90],       ["bend", 270],      ["", 0],
+            ["bend", 270],       ["straight", 0],    ["bend", 0],        ["straight", 0],
+            ["straight", 90],    ["bend", 0],        ["straight", 90],   ["", 0]
+        ];
+        solutionMap[startIdx] = ["", 0];
+        solutionMap[endIdx] = ["", 0];
+
+
+        function drawPipe(type, rotation, isFlowing = false) {
+            const canvas = document.createElement("canvas");
+            canvas.width = 60;
+            canvas.height = 60;
+            canvas.className = "pipe";
+            const ctx = canvas.getContext("2d");
+
+            ctx.translate(30, 30);
+            ctx.rotate((rotation * Math.PI) / 180);
+            ctx.translate(-30, -30);
+
+            // Draw the main pipe
+            ctx.lineWidth = 10;
+            ctx.strokeStyle = "#0077aa"; // Blue pipe color
+            ctx.lineCap = "round";
+            ctx.beginPath();
+
+            if (type === "straight") {
+                ctx.moveTo(30, 0);
+                ctx.lineTo(30, 60);
+            } else if (type === "bend") {
+                ctx.moveTo(30, 0);
+                ctx.lineTo(30, 30);
+                ctx.lineTo(60, 30);
+            }
+            ctx.stroke();
+
+            // Draw the flowing water if isFlowing is true
+            if (isFlowing) {
+                ctx.lineWidth = 6; // Thinner line for water
+                ctx.strokeStyle = "#4CAF50"; // Green color for water
+                ctx.beginPath();
+                // To make water always flow from the "inlet" of the pipe
+                // This requires knowing the connection direction, which is complex for simple rotation.
+                // For simplicity, we'll draw it along the pipe's primary direction regardless of flow direction.
+                if (type === "straight") {
+                    ctx.moveTo(30, 0);
+                    ctx.lineTo(30, 60);
+                } else if (type === "bend") {
+                    ctx.moveTo(30, 0);
+                    ctx.lineTo(30, 30);
+                    ctx.lineTo(60, 30);
+                }
+                ctx.stroke();
+            }
+
+            return canvas;
+        }
+
+        function setupPipeClick(pipeElement, index, type) {
+            // Disable clicks if the game is won, or for start/end/empty cells
+            if (winMessage.style.display === "block" || index === startIdx || index === endIdx || type === "") {
+                pipeElement.onclick = null;
+                return;
+            }
+
+            pipeElement.onclick = () => {
+                let currentRot = parseInt(pipeElement.dataset.rotation);
+                let newRot;
+
+                if (type === "straight") {
+                    newRot = (currentRot === 0) ? 90 : 0;
+                } else if (type === "bend") {
+                    newRot = (currentRot + 90) % 360;
+                } else {
+                    newRot = currentRot;
+                }
+                
+                map[index][1] = newRot; // Update game map state
+
+                const newPipe = drawPipe(type, newRot); // Draw the pipe without flow initially
+                newPipe.dataset.rotation = newRot;
+                newPipe.dataset.type = type;
+
+                // Rebind click event to the new canvas element
+                setupPipeClick(newPipe, index, type);
+
+                pipeElement.parentNode.replaceChild(newPipe, pipeElement);
+            };
+        }
+
+        function animateWaterFlow(path) {
+            const cells = grid.querySelectorAll('.cell');
+            let i = 0;
+            const animationDelay = 150; // Adjust delay for faster/slower animation
+            checkButton.style.display = "none"; // Hide check button during animation
+
+            function drawNextPipe() {
+                if (i < path.length) {
+                    const currentIndex = path[i];
+                    const cell = cells[currentIndex];
+                    const [type, rotation] = solutionMap[currentIndex]; // Use solutionMap for correct type and rotation
+
+                    // Only redraw pipes on the correct path with water flow
+                    // Also redraw start/end if they contain a pipe type for consistency, otherwise skip
+                    if (type || currentIndex === startIdx || currentIndex === endIdx) { 
+                        const oldPipe = cell.querySelector('.pipe');
+                        if (oldPipe) {
+                            cell.removeChild(oldPipe);
+                        }
+                        const newPipe = drawPipe(type, rotation, true); // Draw with flow
+                        newPipe.dataset.rotation = rotation;
+                        newPipe.dataset.type = type;
+                        cell.appendChild(newPipe);
+                    }
+                    
+                    i++;
+                    setTimeout(drawNextPipe, animationDelay);
+                } else {
+                    // Animation complete
+                    winMessage.style.display = "block";
+                    winMessage.style.opacity = "1"; // Fade in win message
+
+                    // Disable further clicks on all pipes after animation
+                    cells.forEach((cell, index) => {
+                        const pipeElement = cell.querySelector('.pipe');
+                        if (pipeElement) {
+                            setupPipeClick(pipeElement, index, map[index][0]); // Re-call setupPipeClick to disable it
+                        }
+                    });
+
+                    // Play video after a short delay
+                    setTimeout(() => {
+                        grid.style.display = 'none'; // Hide the game grid
+                        winMessage.style.display = 'none'; // Hide the win message
+                        winVideo.style.display = 'block'; // Show the video
+                        winVideo.play(); // Play the video
+                        winVideo.muted = false; // Unmute the video for sound
+                    }, 1000); // 1 second delay after win message appears
+                }
+            }
+            drawNextPipe(); // Start the animation
+        }
+
+
+        function checkWin() {
+            console.log("--- 執行 checkWin (基於預設解答) ---");
+
+            let isSolved = true;
+            for (let i = 0; i < map.length; i++) {
+                // For the correct path, check against solutionMap
+                if (correctPath.includes(i)) {
+                    if (map[i][0] !== solutionMap[i][0] || map[i][1] !== solutionMap[i][1]) {
+                        isSolved = false;
+                        console.log(`位置 ${i} 不匹配: 當前 [${map[i][0]}, ${map[i][1]}] vs 解答 [${solutionMap[i][0]}, ${solutionMap[i][1]}]`);
+                        break;
+                    }
+                } else {
+                    // For cells not in the correct path, ensure they are in their initial state (or empty/non-pipe)
+                    // This part depends on how strict you want non-path cells to be.
+                    // For simplicity, we only strictly check the correct path.
+                    // If you want to ensure other pipes are NOT rotated, you'd add more checks here.
+                }
+            }
+
+            if (isSolved) {
+                console.log("--- 破關成功！ 🎉 開始水流動畫 ---");
+                animateWaterFlow(correctPath); // Start the water flow animation
+            } else {
+                winMessage.style.display = "none"; // Ensure win message is hidden if not solved
+                console.log("--- 尚未破關 ---");
+            }
+        }
+
+        function initializeGameGrid() {
+            grid.innerHTML = '';
+            map.forEach(([type, rotation], index) => {
+                const cell = document.createElement("div");
+                cell.classList.add("cell");
+
+                if (index === startIdx) cell.classList.add("start");
+                if (index === endIdx) cell.classList.add("end");
+
+                if (type) {
+                    let rot = rotation;
+                    const pipe = drawPipe(type, rot);
+                    pipe.dataset.rotation = rot;
+                    pipe.dataset.type = type;
+
+                    setupPipeClick(pipe, index, type);
+
+                    cell.appendChild(pipe);
+                }
+
+                grid.appendChild(cell);
+            });
+            winMessage.style.display = "none"; // Hide win message at game start
+            winMessage.style.opacity = "0"; // Reset opacity
+            winVideo.style.display = "none"; // Hide video at game start
+            checkButton.style.display = "block"; // Show check button
+        }
+
+        checkButton.addEventListener('click', checkWin);
+
+        startGameButton.addEventListener('click', () => {
+            gameRulesModal.style.display = 'none';
+            initializeGameGrid();
+            console.log("遊戲開始！");
+        });
+
+        gameRulesModal.style.display = 'flex';
+        console.log("等待玩家開始遊戲...");
+
+    </script>
+</body>
+</html>
